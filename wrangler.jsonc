@@ -1,0 +1,64 @@
+/**
+ * For more details on how to configure Wrangler, refer to:
+ * https://developers.cloudflare.com/workers/wrangler/configuration/
+ */
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "mcp-memoryv2",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-03-10",
+  "compatibility_flags": ["nodejs_compat"],
+  "migrations": [
+    {
+      "new_sqlite_classes": ["MyMCP"],
+      "tag": "v1"
+    },
+  ],
+  "unsafe": {
+    "bindings": [
+      {
+        "name": "RATE_LIMITER",
+        "type": "ratelimit",
+        "namespace_id": "1001",
+        "simple": {
+          "limit": 100,
+          "period": 60
+        }
+      }
+    ]
+  },
+  "vars": {
+    "GEMINI_API_KEY": "AIzaSyD1TcNRx3fG6XXPr2Nw9ALkqYIix-MtH5g"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "mcp-memoryV2",
+      "database_id": "bd62e817-d9c9-4210-aea8-09e5c34a49d9"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "class_name": "MyMCP",
+        "name": "MCP_OBJECT"
+      }
+    ]
+  },
+  "observability": {
+    "enabled": true
+  },
+  "ai": {
+    "binding": "AI"
+  },
+  "assets": {
+    "directory": "./static/",
+    "binding": "ASSETS"
+  },
+  "vectorize": [
+    {
+      "binding": "VECTORIZE",
+      "index_name": "mcp-memoryv2"
+    }
+  ]
+}
