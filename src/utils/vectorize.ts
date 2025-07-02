@@ -5,12 +5,41 @@ import { createGeminiService } from './gemini';
 // Minimum similarity score for vector search results
 const MINIMUM_SIMILARITY_SCORE = 0.0;
 
+// Expected dimensions for Gemini embeddings
+const EXPECTED_GEMINI_DIMENSIONS = 768;
+
+/**
+ * Validates embedding dimensions to ensure compatibility
+ */
+function validateEmbeddingDimensions(embedding: number[]): void {
+  if (embedding.length !== EXPECTED_GEMINI_DIMENSIONS) {
+    throw new Error(`Embedding dimension mismatch: expected ${EXPECTED_GEMINI_DIMENSIONS}, got ${embedding.length}. This usually indicates a Vectorize index configuration issue.`);
+  }
+}
+
 /**
  * Generates vector embeddings from text using Gemini's embedding model
  */
 async function generateEmbeddings(text: string, env: Env): Promise<number[]> {
-  const geminiService = createGeminiService(env);
-  return await geminiService.generateEmbeddings(text);
+  try {
+    const geminiService = createGeminiService(env);
+    const embedding = await geminiService.generateEmbeddings(text);
+    
+    // Validate dimensions before returning
+    validateEmbeddingDimensions(embedding);
+    
+    console.log(`Generated Gemini embedding with ${embedding.length} dimensions`);
+    return embedding;
+  } catch (error) {
+    console.error("Error generating Gemini embeddings:", error);
+    
+    // If it's a dimension error, provide helpful guidance
+    if (error instanceof Error && error.message.includes('dimension mismatch')) {
+      throw new Error(`${error.message}\n\nTo fix this:\n1. Create a new Vectorize index with 768 dimensions\n2. Update wrangler.jsonc to use the new index\n3. Re-deploy the worker`);
+    }
+    
+    throw error;
+  }
 }
 
 /**
@@ -42,7 +71,7 @@ export async function storeEmailMemory(
     // Create comprehensive content for vectorization
     const fullContent = createEmailContent(metadata);
     
-    // Generate embedding using Gemini
+    // Generate embedding using Gemini with dimension validation
     const values = await generateEmbeddings(fullContent, env);
 
     // Store in Vectorize with full metadata
@@ -60,15 +89,23 @@ export async function storeEmailMemory(
           threadId: metadata.threadId || '',
           conversationId: metadata.conversationId || '',
           attachments: metadata.attachments || '',
-          emailType: metadata.emailType || 'standard'
+          emailType: metadata.emailType || 'standard',
+          embeddingModel: 'gemini-text-embedding-004',
+          embeddingDimensions: values.length.toString()
         },
       },
     ]);
 
-    console.log(`Email memory stored in Vectorize with Gemini embeddings: ${memoryId}`);
+    console.log(`Email memory stored in Vectorize with Gemini embeddings: ${memoryId} (${values.length} dimensions)`);
     return memoryId;
   } catch (error) {
     console.error("Error storing email memory with Gemini embeddings:", error);
+    
+    // Provide helpful error context
+    if (error instanceof Error && error.message.includes('dimension')) {
+      throw new Error(`Failed to store email memory due to embedding dimension mismatch. ${error.message}`);
+    }
+    
     throw error;
   }
 }
@@ -111,7 +148,7 @@ export async function searchEmailMemories(
   try {
     console.log(`Searching email memories for user ${userId} with query: "${query}"`);
     
-    // Generate embedding for query using Gemini
+    // Generate embedding for query using Gemini with validation
     const queryVector = await generateEmbeddings(query, env);
 
     // Search Vectorize
@@ -178,6 +215,12 @@ export async function searchEmailMemories(
     return memories;
   } catch (error) {
     console.error("Error searching email memories with Gemini:", error);
+    
+    // Provide helpful error guidance for dimension issues
+    if (error instanceof Error && error.message.includes('dimension')) {
+      throw new Error(`Search failed due to embedding dimension mismatch. This indicates the Vectorize index needs to be updated for Gemini embeddings (768 dimensions). ${error.message}`);
+    }
+    
     throw error;
   }
 }
@@ -216,7 +259,7 @@ export async function updateEmailMemoryVector(
     // Create comprehensive content for vectorization
     const fullContent = createEmailContent(fullMetadata);
     
-    // Generate new embedding using Gemini
+    // Generate new embedding using Gemini with validation
     const newValues = await generateEmbeddings(fullContent, env);
 
     // Upsert into Vectorize to update
@@ -226,22 +269,29 @@ export async function updateEmailMemoryVector(
         values: newValues,
         namespace: userId,
         metadata: {
-        content: fullMetadata.content,
-        senderEmail: fullMetadata.senderEmail,
-        senderName: fullMetadata.senderName || '',
-        subject: fullMetadata.subject || '',
-        dateSent: fullMetadata.dateSent,
-        threadId: fullMetadata.threadId || '',
-        conversationId: fullMetadata.conversationId || '',
-        attachments: fullMetadata.attachments || '',
-        emailType: fullMetadata.emailType || 'standard'
-      },
+          content: fullMetadata.content,
+          senderEmail: fullMetadata.senderEmail,
+          senderName: fullMetadata.senderName || '',
+          subject: fullMetadata.subject || '',
+          dateSent: fullMetadata.dateSent,
+          threadId: fullMetadata.threadId || '',
+          conversationId: fullMetadata.conversationId || '',
+          attachments: fullMetadata.attachments || '',
+          emailType: fullMetadata.emailType || 'standard',
+          embeddingModel: 'gemini-text-embedding-004',
+          embeddingDimensions: newValues.length.toString()
+        },
       },
     ]);
 
-    console.log(`Email vector for memory ${memoryId} updated with Gemini embeddings.`);
+    console.log(`Email vector for memory ${memoryId} updated with Gemini embeddings (${newValues.length} dimensions).`);
   } catch (error) {
     console.error("Error updating email memory vector with Gemini:", error);
+    
+    if (error instanceof Error && error.message.includes('dimension')) {
+      throw new Error(`Update failed due to embedding dimension mismatch. ${error.message}`);
+    }
+    
     throw error;
   }
 }
@@ -303,6 +353,11 @@ export async function findSimilarEmails(
     
     const emailVector = emailVectors[0].values;
     
+    // Validate the retrieved vector dimensions
+    if (emailVector.length !== EXPECTED_GEMINI_DIMENSIONS) {
+      console.warn(`Retrieved vector has ${emailVector.length} dimensions, expected ${EXPECTED_GEMINI_DIMENSIONS}. This may indicate mixed embedding models.`);
+    }
+    
     // Search for similar emails
     const results = await env.VECTORIZE.query(emailVector, {
       namespace: userId,
@@ -358,5 +413,30 @@ export async function analyzeEmailWithGemini(
   } catch (error) {
     console.error("Error analyzing email with Gemini:", error);
     throw error;
+  }
+}
+
+/**
+ * Check if Vectorize index is properly configured for Gemini embeddings
+ */
+export async function validateVectorizeConfiguration(env: Env): Promise<{
+  isConfigured: boolean;
+  expectedDimensions: number;
+  error?: string;
+}> {
+  try {
+    // Try to generate a test embedding
+    const testEmbedding = await generateEmbeddings("test", env);
+    
+    return {
+      isConfigured: true,
+      expectedDimensions: testEmbedding.length
+    };
+  } catch (error) {
+    return {
+      isConfigured: false,
+      expectedDimensions: EXPECTED_GEMINI_DIMENSIONS,
+      error: error instanceof Error ? error.message : String(error)
+    };
   }
 }

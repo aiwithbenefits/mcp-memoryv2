@@ -58,7 +58,7 @@
   "vectorize": [
     {
       "binding": "VECTORIZE",
-      "index_name": "mcp-memoryv2"
+      "index_name": "mcp-memoryv2-gemini"
     }
   ]
 }
