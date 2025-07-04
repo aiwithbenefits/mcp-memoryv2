@@ -7,7 +7,7 @@ import type { EmailMemory } from '../types';
 export async function initializeDatabase(env: Env): Promise<void> {
   try {
     // Create main email memories table with comprehensive email fields
-    await env.DB.exec(`
+    const createEmailMemoriesTableQuery = `
       CREATE TABLE IF NOT EXISTS email_memories (
         id TEXT PRIMARY KEY,
         userId TEXT NOT NULL,
@@ -20,16 +20,27 @@ export async function initializeDatabase(env: Env): Promise<void> {
         threadId TEXT,
         conversationId TEXT,
         relatedEmailIds TEXT,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_sender_email (senderEmail),
-        INDEX idx_thread_id (threadId),
-        INDEX idx_conversation_id (conversationId),
-        INDEX idx_date_sent (dateSent)
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
-    `);
+    `;
+    console.log("Executing SQL for email_memories:", createEmailMemoriesTableQuery);
+    await env.DB.exec(createEmailMemoriesTableQuery);
+
+    // Create indexes for email_memories table
+    const indexStatements = [
+      "CREATE INDEX IF NOT EXISTS idx_sender_email ON email_memories (senderEmail);",
+      "CREATE INDEX IF NOT EXISTS idx_thread_id ON email_memories (threadId);",
+      "CREATE INDEX IF NOT EXISTS idx_conversation_id ON email_memories (conversationId);",
+      "CREATE INDEX IF NOT EXISTS idx_date_sent ON email_memories (dateSent);"
+    ];
+
+    for (const stmt of indexStatements) {
+      console.log("Executing SQL:", stmt);
+      await env.DB.exec(stmt);
+    }
     
     // Create email relationships table for tracking email connections
-    await env.DB.exec(`
+    const createEmailRelationshipsTableQuery = `
       CREATE TABLE IF NOT EXISTS email_relationships (
         id TEXT PRIMARY KEY,
         email_id TEXT NOT NULL,
@@ -39,7 +50,9 @@ export async function initializeDatabase(env: Env): Promise<void> {
         FOREIGN KEY (email_id) REFERENCES email_memories(id),
         FOREIGN KEY (related_email_id) REFERENCES email_memories(id)
       )
-    `);
+    `;
+    console.log("Executing SQL for email_relationships:", createEmailRelationshipsTableQuery);
+    await env.DB.exec(createEmailRelationshipsTableQuery);
     
     console.log("Email memory tables created/verified in D1.");
   } catch (e) {
