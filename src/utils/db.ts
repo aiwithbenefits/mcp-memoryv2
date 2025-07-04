@@ -6,57 +6,18 @@ import type { EmailMemory } from '../types';
  */
 export async function initializeDatabase(env: Env): Promise<void> {
   try {
-    // Create main email memories table with comprehensive email fields
-    const createEmailMemoriesTableQuery = `
-      CREATE TABLE IF NOT EXISTS email_memories (
-        id TEXT PRIMARY KEY,
-        userId TEXT NOT NULL,
-        senderEmail TEXT NOT NULL,
-        senderName TEXT,
-        subject TEXT,
-        body TEXT NOT NULL,
-        attachments TEXT,
-        dateSent TEXT NOT NULL,
-        threadId TEXT,
-        conversationId TEXT,
-        relatedEmailIds TEXT,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP
-      )
-    `;
-    console.log("Executing SQL for email_memories:", createEmailMemoriesTableQuery);
+    // Create main email memories table with comprehensive email fields - SIMPLIFIED
+    const createEmailMemoriesTableQuery = "CREATE TABLE IF NOT EXISTS email_memories (id TEXT PRIMARY KEY, userId TEXT NOT NULL)";
+
+    console.log("Executing SQL for email_memories (simplified):", createEmailMemoriesTableQuery);
     await env.DB.exec(createEmailMemoriesTableQuery);
 
-    // Create indexes for email_memories table
-    const indexStatements = [
-      "CREATE INDEX IF NOT EXISTS idx_sender_email ON email_memories (senderEmail);",
-      "CREATE INDEX IF NOT EXISTS idx_thread_id ON email_memories (threadId);",
-      "CREATE INDEX IF NOT EXISTS idx_conversation_id ON email_memories (conversationId);",
-      "CREATE INDEX IF NOT EXISTS idx_date_sent ON email_memories (dateSent);"
-    ];
-
-    for (const stmt of indexStatements) {
-      console.log("Executing SQL:", stmt);
-      await env.DB.exec(stmt);
-    }
+    // Temporarily removed index creation for email_memories
+    // Temporarily removed email_relationships table creation
     
-    // Create email relationships table for tracking email connections
-    const createEmailRelationshipsTableQuery = `
-      CREATE TABLE IF NOT EXISTS email_relationships (
-        id TEXT PRIMARY KEY,
-        email_id TEXT NOT NULL,
-        related_email_id TEXT NOT NULL,
-        relationship_type TEXT NOT NULL,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (email_id) REFERENCES email_memories(id),
-        FOREIGN KEY (related_email_id) REFERENCES email_memories(id)
-      )
-    `;
-    console.log("Executing SQL for email_relationships:", createEmailRelationshipsTableQuery);
-    await env.DB.exec(createEmailRelationshipsTableQuery);
-    
-    console.log("Email memory tables created/verified in D1.");
+    console.log("Simplified email_memories table creation attempted.");
   } catch (e) {
-    console.error("Failed to create email memory tables in D1:", e);
+    console.error("Failed to create email memory tables in D1 (simplified attempt):", e);
     throw e;
   }
 }
